@@ -8,9 +8,13 @@ on:
     branches:
       - "**"
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: windows-latest
+    timeout-minutes: 20
 
     steps:
     - name: Checkout repository
@@ -22,10 +26,10 @@ jobs:
         dotnet-version: "10.0.x"
 
     - name: Restore dependencies
-      run: dotnet restore CyberSuite.sln
+      run: dotnet restore CyberSuite.slnx
 
     - name: Build solution
-      run: dotnet build CyberSuite.sln --configuration Release --no-restore
+      run: dotnet build CyberSuite.slnx --configuration Release --no-restore
 
     - name: Run tests
-      run: dotnet test CyberSuite.sln --configuration Release --no-build --verbosity normal
+      run: dotnet test CyberSuite.slnx --configuration Release --no-build --verbosity normal
