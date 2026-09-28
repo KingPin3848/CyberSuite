@@ -10,10 +10,14 @@ on:
   schedule:
     - cron: "0 3 * * *"   # Daily full scan at 3 AM
 
+permissions:
+  contents: read
+
 jobs:
   codeql:
     name: CodeQL Full Scan (C#)
     runs-on: windows-latest
+    timeout-minutes: 30
 
     permissions:
       security-events: write
@@ -37,7 +41,7 @@ jobs:
         queries: +security-extended,security-and-quality
 
     - name: Build solution for CodeQL
-      run: dotnet build CyberSuite.sln --configuration Release
+      run: dotnet build CyberSuite.slnx --configuration Release
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v3
