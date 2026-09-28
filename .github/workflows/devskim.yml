@@ -1,34 +1,73 @@
-# This workflow uses actions that are not certified by GitHub.
-# They are provided by a third-party and are governed by
-# separate terms of service, privacy policy, and support
-# documentation.
-
 name: DevSkim
 
 on:
   push:
-    branches: [ "master" ]
+    branches:
+      - "**"
   pull_request:
-    branches: [ "master" ]
+    branches:
+      - "**"
   schedule:
     - cron: '44 6 * * 6'
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
-  lint:
-    name: DevSkim
-    runs-on: ubuntu-latest
+  devskim:
+    name: DevSkim (SARIF)
+    runs-on: windows-latest
     permissions:
       actions: read
       contents: read
       security-events: write
+    env:
+      DEVSKIM_CLI_VERSION: 1.0.90
+      DEVSKIM_OUTPUT_FILE: artifacts/devskim/devskim-results.sarif
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - name: Checkout repository
+        # actions/checkout@v4.4.0
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
-      - name: Run DevSkim scanner
-        uses: microsoft/DevSkim-Action@v1
-
-      - name: Upload DevSkim scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v3
+      - name: Setup .NET SDK
+        # actions/setup-dotnet@v4.3.1
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9
         with:
-          sarif_file: devskim-results.sarif
+          dotnet-version: "10.0.x"
+
+      - name: Install DevSkim CLI
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          dotnet tool install --tool-path "$env:RUNNER_TEMP\devskim" Microsoft.CST.DevSkim.CLI --version $env:DEVSKIM_CLI_VERSION
+          & "$env:RUNNER_TEMP\devskim\devskim.exe" --version
+
+      - name: Run DevSkim scan
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $sarifPath = Join-Path $env:GITHUB_WORKSPACE 'artifacts\devskim\devskim-results.sarif'
+          $sarifDirectory = Split-Path -Path $sarifPath -Parent
+          New-Item -ItemType Directory -Force -Path $sarifDirectory | Out-Null
+          & "$env:RUNNER_TEMP\devskim\devskim.exe" analyze `
+            --source-code $env:GITHUB_WORKSPACE `
+            --file-format sarif `
+            --output-file $sarifPath
+
+      - name: Verify SARIF output
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $sarifPath = Join-Path $env:GITHUB_WORKSPACE 'artifacts\devskim\devskim-results.sarif'
+          if (-not (Test-Path -Path $sarifPath -PathType Leaf)) {
+            throw "Expected SARIF file was not created: $sarifPath"
+          }
+          Get-Item -Path $sarifPath | Format-List FullName,Length,LastWriteTime
+
+      - name: Upload DevSkim scan results
+        # github/codeql-action/upload-sarif@v3.38.2
+        uses: github/codeql-action/upload-sarif@1190a975f95ce23525efb6a3fc21ea29567c1b52
+        with:
+          sarif_file: ${{ env.DEVSKIM_OUTPUT_FILE }}
+          category: devskim
